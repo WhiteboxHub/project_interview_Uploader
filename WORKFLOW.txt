@@ -1,0 +1,328 @@
+═══════════════════════════════════════════════════════════════════
+  INTERVIEW RECORDING UPLOAD AUTOMATION - WORKFLOW DIAGRAM
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 1: USER OPENS APP                                         │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Load Saved Configuration                                       │
+│  • MySQL credentials                                            │
+│  • File paths (compressed storage, OneDrive)                    │
+│  • Google Drive tokens (if previously authenticated)            │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Status Bar Shows:                                              │
+│  • Database: ● Disconnected    [Connect]                        │
+│  • Google Drive: ● Not Connected    [Authenticate]              │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 2: CONNECT TO DATABASE                                    │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+              User clicks "Connect" button
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  MySQL Connection Attempt                                       │
+│  • Host: localhost:3306                                         │
+│  • Database: interviews                                         │
+│  • Validates credentials                                        │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+                    ┌─────────────────┐
+                    │  Connected?     │
+                    └─────────────────┘
+                       YES │  │ NO
+                    ───────┘  └──────────┐
+                    ▼                    ▼
+          ┌──────────────────┐  ┌──────────────────┐
+          │ Status: Connected│  │ Show Error       │
+          │ Button: Disconnect│  │ Allow Retry      │
+          └──────────────────┘  └──────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 3: AUTHENTICATE GOOGLE DRIVE                              │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+          User clicks "Authenticate" button
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  OAuth Flow                                                     │
+│  1. Read google_credentials.json                               │
+│  2. Generate OAuth URL                                          │
+│  3. Open browser for user consent                              │
+│  4. User grants permissions                                     │
+│  5. Copy authorization code                                     │
+│  6. Paste code in app                                           │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Save Tokens → Initialize Drive API                            │
+│  Status: ● Connected                                            │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 4: DRAG VIDEO FILE                                        │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+         User drags video.mp4 to drop zone
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Validation Checks                                              │
+│  ✅ Database connected?                                         │
+│  ✅ Google Drive authenticated?                                 │
+│  ✅ File is video format? (mp4, mov, mkv, avi)                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+                        All checks pass
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  MODAL: Enter Interview ID                                      │
+│  ┌───────────────────────────────────────────────────┐         │
+│  │ File: recording_2024-01-15.mp4                    │         │
+│  │                                                    │         │
+│  │ Interview ID: [2671]                              │         │
+│  │                                                    │         │
+│  │         [Cancel]  [Submit]                        │         │
+│  └───────────────────────────────────────────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+                      User enters ID: 2671
+                              ▼
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 5: DATABASE VALIDATION                                    │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Query Database:                                                │
+│  SELECT ci.id, c.full_name, ci.company,                         │
+│         ci.type_of_interview, ci.interview_date                 │
+│  FROM candidate_interview ci                                    │
+│  JOIN candidate c ON ci.candidate_id = c.id                     │
+│  WHERE ci.id = 2671                                             │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+                    ┌─────────────────┐
+                    │  Found?         │
+                    └─────────────────┘
+                       YES │  │ NO
+                    ───────┘  └──────────┐
+                    ▼                    ▼
+          ┌──────────────────┐  ┌──────────────────┐
+          │ Continue to      │  │ Error: ID not    │
+          │ Preview          │  │ found - Retry    │
+          └──────────────────┘  └──────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 6: PREVIEW CONFIRMATION                                   │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  MODAL: Confirm Interview Details                               │
+│  ┌───────────────────────────────────────────────────┐         │
+│  │ Interview ID:  2671                                │         │
+│  │ Candidate:     John Doe                            │         │
+│  │ Company:       Google                              │         │
+│  │ Type:          Technical                           │         │
+│  │ Date:          2024-01-15                          │         │
+│  │                                                    │         │
+│  │ File will be renamed to:                          │         │
+│  │ John_Doe_Google_Technical_2024-01-15.mp4          │         │
+│  │                                                    │         │
+│  │         [Cancel]  [Continue]                      │         │
+│  └───────────────────────────────────────────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+                    User clicks "Continue"
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Add to Queue (Non-blocking)                                    │
+│  • Create queue item with UUID                                  │
+│  • Status: Waiting                                              │
+│  • User can drag another video immediately                      │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 7: QUEUE PROCESSING (Background)                          │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  SUB-STEP 7.1: VIDEO COMPRESSION                                │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+          Status: Compressing... (Progress: 0%)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  FFmpeg Analysis:                                               │
+│  • Analyze video properties (resolution, bitrate, codec)        │
+│  • File size: 850 MB                                            │
+│  • Resolution: 1920x1080                                        │
+│  • Current codec: h264                                          │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Select Compression Strategy (Size: 800-1500 MB)                │
+│  • CRF: 22                                                      │
+│  • Preset: slow                                                 │
+│  • Two-pass: Yes                                                │
+│  • Target reduction: ~25%                                       │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Pass 1/2: Analysis                                             │
+│  Progress: 0% → 50%                                             │
+│  UI updates every second                                        │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Pass 2/2: Encoding                                             │
+│  Progress: 50% → 100%                                           │
+│  UI updates every second                                        │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Compression Complete                                           │
+│  • Original: 850 MB                                             │
+│  • Compressed: 637 MB (25% saved)                               │
+│  • Location: D:\InterviewBackups\Compressed\                   │
+│  • Filename: John_Doe_Google_Technical_2024-01-15.mp4          │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  SUB-STEP 7.2: GOOGLE DRIVE UPLOAD                              │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+       Status: Uploading to Google Drive... (Progress: 50%)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Find or Create Folder Structure:                               │
+│  Interview_Recordings/                                          │
+│    └── Google/                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Upload File (Resumable Upload)                                 │
+│  • Source: D:\InterviewBackups\Compressed\John_Doe_...mp4      │
+│  • Destination: Drive/Interview_Recordings/Google/              │
+│  • File size: 637 MB                                            │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+                    ┌─────────────────┐
+                    │  Success?       │
+                    └─────────────────┘
+                       YES │  │ NO (Retry)
+                    ───────┘  └──────────┐
+                    ▼                    ▼
+          ┌──────────────────┐  ┌──────────────────┐
+          │ Make Public      │  │ Wait 10s         │
+          │ Get Share Link   │  │ Retry (max 3x)   │
+          └──────────────────┘  └──────────────────┘
+                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Shareable Link Generated:                                      │
+│  https://drive.google.com/file/d/ABC123xyz/view                 │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  SUB-STEP 7.3: ONEDRIVE BACKUP                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+       Status: Saving to OneDrive... (Progress: 75%)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Copy to OneDrive Sync Folder:                                  │
+│  • Source: D:\InterviewBackups\Compressed\John_Doe_...mp4      │
+│  • Destination: C:\Users\Name\OneDrive\Interviews\Google\       │
+│  • OneDrive app syncs automatically                             │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Local Path Captured:                                           │
+│  C:\Users\Name\OneDrive\Interviews\Google\John_Doe_...mp4      │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  SUB-STEP 7.4: DATABASE UPDATE                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+       Status: Updating database... (Progress: 90%)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  UPDATE candidate_interview                                     │
+│  SET recording_link = 'https://drive.google.com/file/d/...'    │
+│      backup_recording_url = 'C:\Users\...\OneDrive\...'        │
+│  WHERE id = 2671                                                │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Schedule Original File Deletion                                │
+│  • File: /user/path/original_recording.mp4                      │
+│  • Delete after: 50 days from now                               │
+│  • Stored in: electron-store (scheduled-deletions)              │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Status: ✅ Completed (Progress: 100%)                          │
+│  • Time taken: 8 minutes 32 seconds                             │
+│  • All operations successful                                    │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│  FINAL STATE                                                    │
+└─────────────────────────────────────────────────────────────────┘
+
+FILES CREATED:
+├── Compressed (kept forever):
+│   D:\InterviewBackups\Compressed\John_Doe_Google_Technical_2024-01-15.mp4
+│
+├── Google Drive (primary):
+│   Interview_Recordings/Google/John_Doe_Google_Technical_2024-01-15.mp4
+│   Link: https://drive.google.com/file/d/ABC123xyz/view
+│
+└── OneDrive (backup):
+    C:\Users\...\OneDrive\Interviews\Google\John_Doe_Google_Technical_2024-01-15.mp4
+
+DATABASE UPDATED:
+candidate_interview.recording_link = "https://drive.google.com/..."
+candidate_interview.backup_recording_url = "C:\Users\...\OneDrive\..."
+
+SCHEDULED:
+Original file deletion in 50 days
+
+QUEUE STATUS:
+✅ John_Doe_Google_Technical_2024-01-15.mp4- Completed
+
+═══════════════════════════════════════════════════════════════════
+
+USER CAN NOW:
+• Drag another video (non-blocking queue)
+• View shareable Google Drive link
+• Access backed up file in OneDrive
+• Check database for updated records
+• Clear completed items from queue
+
+═══════════════════════════════════════════════════════════════════

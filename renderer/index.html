@@ -1,0 +1,228 @@
+ <!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Interview Recording Uploader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>📹 Interview Recording Uploader</h1>
+      <div class="header-actions">
+        <button id="settingsBtn" class="btn btn-secondary">⚙️ Settings</button>
+      </div>
+    </header>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-label">Database:</span>
+        <span id="dbStatus" class="status-value status-disconnected">● Disconnected</span>
+        <button id="dbConnectBtn" class="btn btn-small">Connect</button>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Google Drive:</span>
+        <span id="driveStatus" class="status-value status-disconnected">● Not Connected</span>
+        <button id="driveAuthBtn" class="btn btn-small">Authenticate</button>
+      </div>
+      <div class="status-item">
+        <span class="status-label">YouTube:</span>
+        <span id="youtubeStatus" class="status-value status-disconnected">● Not Connected</span>
+        <button id="youtubeAuthBtn" class="btn btn-small">Authenticate</button>
+      </div>
+    </div>
+
+    <!-- Drop Zone -->
+    <div id="dropZone" class="drop-zone">
+      <div class="drop-zone-content">
+        <div class="drop-icon">📁</div>
+        <h2>Drag & Drop Videos Here</h2>
+        <p>Supported formats: MP4, MOV, MKV, AVI</p>
+        <p class="drop-hint">Videos will be processed automatically</p>
+      </div>
+    </div>
+
+    <!-- Google-style Upload Bar (Fixed Bottom) -->
+    <div class="upload-bar" id="uploadBar" style="display: none;">
+      <div class="upload-bar-content">
+        <div class="upload-info">
+          <div class="upload-icon">
+            <svg class="spinner" viewBox="0 0 50 50">
+              <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+            </svg>
+          </div>
+          <div class="upload-details">
+            <div class="upload-filename" id="uploadFilename">Processing...</div>
+            <div class="upload-status" id="uploadStatus">Preparing upload...</div>
+          </div>
+        </div>
+        <div class="upload-progress-section">
+          <div class="upload-percentage" id="uploadPercentage">0%</div>
+          <button class="upload-close" id="uploadClose">×</button>
+        </div>
+      </div>
+      <div class="upload-progress-bar">
+        <div class="upload-progress-fill" id="uploadProgressFill"></div>
+      </div>
+    </div>
+
+    <!-- Queue Section -->
+    <div class="queue-section">
+      <div class="queue-header">
+        <h3>Processing Queue (<span id="queueCount">0</span>)</h3>
+        <button id="clearCompletedBtn" class="btn btn-small btn-secondary">Clear Completed</button>
+      </div>
+      <div id="queueList" class="queue-list">
+        <div class="empty-queue">No videos in queue</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <h3>MySQL Database</h3>
+          <div class="form-group">
+            <label>Host:</label>
+            <input type="text" id="dbHost" value="localhost">
+          </div>
+          <div class="form-group">
+            <label>Port:</label>
+            <input type="number" id="dbPort" value="3306">
+          </div>
+          <div class="form-group">
+            <label>User:</label>
+            <input type="text" id="dbUser" value="root">
+          </div>
+          <div class="form-group">
+            <label>Password:</label>
+            <input type="password" id="dbPassword">
+          </div>
+          <div class="form-group">
+            <label>Database:</label>
+            <input type="text" id="dbName" value="interviews">
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>File Paths</h3>
+          <div class="form-group">
+            <label>Compressed Storage:</label>
+            <div class="input-group">
+              <input type="text" id="compressedStorage" placeholder="D:\InterviewBackups\Compressed">
+              <button class="btn btn-small" id="browseCompressed">Browse</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Google Drive Settings</h3>
+          <div class="form-group">
+            <label>Drive Folder ID (optional):</label>
+            <input type="text" id="driveFolderId" placeholder="1a2B3c4D5e6F7g8H9i0J">
+            <small style="color: #666; font-size: 12px;">Get from folder URL after /folders/ or leave empty</small>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelSettings">Cancel</button>
+        <button class="btn btn-primary" id="saveSettings">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interview ID Modal -->
+  <div id="idModal" class="modal">
+    <div class="modal-content modal-small">
+      <div class="modal-header">
+        <h2>Enter Interview ID</h2>
+      </div>
+      <div class="modal-body">
+        <p class="modal-file-name">File: <span id="currentFileName"></span></p>
+        <div class="form-group">
+          <label>Interview ID:</label>
+          <input type="number" id="interviewId" placeholder="e.g., 2671" autofocus>
+        </div>
+        <div id="idError" class="error-message" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelId">Cancel</button>
+        <button class="btn btn-primary" id="submitId">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div id="previewModal" class="modal">
+    <div class="modal-content modal-small">
+      <div class="modal-header">
+        <h2>Confirm Interview Details</h2>
+      </div>
+      <div class="modal-body">
+        <div class="preview-details">
+          <div class="preview-row">
+            <span class="preview-label">Interview ID:</span>
+            <span id="previewId" class="preview-value"></span>
+          </div>
+          <div class="preview-row">
+            <span class="preview-label">Candidate:</span>
+            <span id="previewCandidate" class="preview-value"></span>
+          </div>
+          <div class="preview-row">
+            <span class="preview-label">Company:</span>
+            <span id="previewCompany" class="preview-value"></span>
+          </div>
+          <div class="preview-row">
+            <span class="preview-label">Type:</span>
+            <span id="previewType" class="preview-value"></span>
+          </div>
+          <div class="preview-row">
+            <span class="preview-label">Date:</span>
+            <span id="previewDate" class="preview-value"></span>
+          </div>
+        </div>
+        <div class="preview-filename">
+          <p><strong>File will be renamed to:</strong></p>
+          <p id="previewFilename" class="filename-display"></p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelPreview">Cancel</button>
+        <button class="btn btn-primary" id="confirmPreview">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Code Modal -->
+  <div id="authModal" class="modal">
+    <div class="modal-content modal-small">
+      <div class="modal-header">
+        <h2 id="authModalTitle">Enter Authorization Code</h2>
+      </div>
+      <div class="modal-body">
+        <p id="authModalInstructions" style="margin-bottom: 15px; line-height: 1.5;"></p>
+        <div class="form-group">
+          <label>Authorization Code:</label>
+          <textarea id="authCode" rows="4" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 12px;" placeholder="Paste code here (e.g., 4/0AX4XfW...)"></textarea>
+        </div>
+        <div id="authError" class="error-message" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="authCancel">Cancel</button>
+        <button class="btn btn-primary" id="authSubmit">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
