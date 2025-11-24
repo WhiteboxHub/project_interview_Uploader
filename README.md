@@ -6,7 +6,7 @@ Desktop application for automated interview recording processing and upload.
 
 - 🎬 Drag & Drop video upload interface
 - 🗜️ Intelligent video compression (FFmpeg)
-- ☁️ Dual cloud backup (Google Drive + OneDrive)
+- ☁️ Dual cloud backup (Google Drive + YouTube)
 - 🗄️ MySQL database integration
 - 📊 Real-time processing queue
 - 🔄 Automatic retry on failures
@@ -20,6 +20,7 @@ Desktop application for automated interview recording processing and upload.
 - **FFmpeg** installed and available in PATH
 - **MySQL** (8.0+) database
 - **Google Drive API** credentials
+- **YouTube API** credentials (optional: separate account)
 
 ### 2. Install Dependencies
 
@@ -27,6 +28,11 @@ Desktop application for automated interview recording processing and upload.
 cd interview-uploader
 npm install
 ```
+
+**Installs all dependencies:**
+- electron, mysql2, googleapis, @googleapis/youtube
+- electron-store, winston, uuid, electron-builder
+- Total: 10 packages (419 with sub-dependencies)
 
 ### 3. Configure Google Drive API
 
@@ -37,20 +43,35 @@ npm install
 5. Download credentials JSON
 6. Save as `config/google_credentials.json`
 
-### 4. Setup Database
+**See:** `config/GOOGLE_SETUP.md` for detailed steps
+### 4. Configure YouTube API
+
+**For personal Gmail (or same account as Drive):**
+
+1. Follow `config/YOUTUBE_SETUP.md`
+2. Enable YouTube Data API v3 in Google Cloud
+3. Add YouTube scopes to OAuth consent
+4. Create credentials (or reuse Drive credentials)
+5. Save as `config/youtube_credentials.json` (if separate account)
+
+**See:** `config/YOUTUBE_SETUP.md` for detailed steps
+
+### 5. Setup Database
 
 Import the schema from the system prompt into your MySQL database.
 
-### 5. Configure Settings
+### 6. Configure Settings
 
 On first run:
 1. Click **Settings** button
 2. Enter MySQL credentials
 3. Set file paths:
    - **Compressed Storage**: Where compressed videos are kept forever
-   - **OneDrive Folder**: Local OneDrive sync folder
+4. Set Google Drive Folder ID (optional):
+   - Copy folder ID from Drive URL
+   - Leave empty to auto-create folders
 
-### 6. Run Application
+### 7. Run Application
 
 **Development mode:**
 ```bash
@@ -67,15 +88,16 @@ Output: `dist/Interview Recording Uploader Setup 1.0.0.exe`
 ## Usage Workflow
 
 1. **Connect Database** - Click "Connect" in status bar
-2. **Authenticate Google Drive** - Follow OAuth flow
-3. **Drag Video File** - Drop video onto drop zone
+2. **Authenticate Google Drive** - Follow OAuth flow (org account)
+3. **Authenticate YouTube** - Follow OAuth flow (personal Gmail)
+4. **Drag Video File** - Drop video onto drop zone
 4. **Enter Interview ID** - Type the candidate_interview.id
 5. **Confirm Details** - Preview shows fetched database info
 6. **Automatic Processing**:
    - ✅ Renames file: `CandidateName_Company_Type_Date.mp4`
    - ✅ Compresses video (if beneficial)
-   - ✅ Uploads to Google Drive (shareable link)
-   - ✅ Copies to OneDrive folder (auto-syncs)
+   - ✅ Uploads to Google Drive (restricted access)
+   - ✅ Uploads to YouTube (private only)
    - ✅ Updates database with both URLs
    - ✅ Schedules original deletion (50 days)
 
@@ -92,11 +114,15 @@ interview-uploader/
 ├── services/
 │   ├── database.js      # MySQL operations
 │   ├── google_drive.js  # Google Drive API
+│   ├── youtube.js       # YouTube API
 │   ├── file_manager.js  # File operations
 │   ├── queue_manager.js # Queue processing
 │   └── video_compressor.js # FFmpeg compression
 ├── config/
-│   └── google_credentials.json # (You add this)
+│   ├── google_credentials.json  # (You add this - Drive)
+│   ├── youtube_credentials.json # (You add this - YouTube)
+│   ├── GOOGLE_SETUP.md          # Drive setup guide
+│   └── YOUTUBE_SETUP.md         # YouTube setup guide
 └── logs/                # Application logs
 ```
 
@@ -135,11 +161,13 @@ Install FFmpeg and add to PATH:
 ### Google Drive Auth Failed
 - Check `google_credentials.json` exists in `config/`
 - Ensure OAuth redirect URI matches
+- Enable Google Drive API in Cloud Console
 
-### OneDrive Sync Issues
-- Verify OneDrive Desktop app is installed
-- Check folder path in Settings
-- Ensure folder is syncing
+### YouTube Upload Failed
+- Check `youtube_credentials.json` exists (if separate account)
+- Enable YouTube Data API v3 in Cloud Console
+- Add YouTube scopes to OAuth consent
+- Check daily quota (10,000 units/day)
 
 ## File Management
 
@@ -147,27 +175,26 @@ Install FFmpeg and add to PATH:
 
 - **Original Files**: Deleted after 50 days (scheduled)
 - **Compressed Files**: Kept forever in `COMPRESSED_STORAGE`
-- **Google Drive**: Primary cloud storage with shareable links
-- **OneDrive**: Backup cloud storage (local sync)
+- **Google Drive**: Primary cloud storage (restricted access)
+- **YouTube**: Backup cloud storage (private only)
 
-### Folder Organization (Both Clouds)
+### Database Storage
 
-```
-Interview_Recordings/
-├── Google/
-│   ├── John_Doe_Google_Technical_2024-01-15.mp4
-│   └── Jane_Smith_Google_HR_2024-01-20.mp4
-├── Microsoft/
-├── Amazon/
-└── Meta/
+```sql
+UPDATE candidate_interview
+SET 
+  recording_link = 'https://drive.google.com/...',        -- Drive (restricted)
+  backup_recording_url = 'https://youtube.com/watch?v=...' -- YouTube (private)
+WHERE id = 2671;
 ```
 
 ## Security Notes
 
 - `.env` file is excluded from builds
 - Database passwords stored in electron-store (encrypted)
-- Google OAuth tokens stored securely
-- Shareable Drive links are public (anyone with link)
+- Google/YouTube OAuth tokens stored securely
+- Drive files: Restricted (owner only)
+- YouTube videos: Private (owner only)
 
 ## Support
 

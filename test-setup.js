@@ -188,7 +188,7 @@ console.log('══════════════════════�
 console.log('📊 VALIDATION SUMMARY\n');
 
 if (errors === 0 && warnings === 0) {
-  console.log('🎉 Perfect! Setup is complete.');
+  console.log(' Perfect! Setup is complete.');
   console.log('\nNext steps:');
   console.log('  1. Add Google credentials: config/google_credentials.json');
   console.log('  2. Configure MySQL database');
