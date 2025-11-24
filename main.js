@@ -6,6 +6,7 @@ const googleDrive = require('./services/google_drive');
 const youtube = require('./services/youtube');
 const queueManager = require('./services/queue_manager');
 const fs = require('fs');
+require('dotenv').config();
 
 const store = new Store();
 let mainWindow;
@@ -28,14 +29,34 @@ function createWindow() {
   mainWindow.webContents.openDevTools();
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
   
-  // Initialize queue manager with saved config
-  const config = store.get('config');
-  if (config) {
-    queueManager.setConfig(config);
+  // Auto-connect database from .env
+  if (process.env.DB_HOST) {
+    const dbConfig = {
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT) || 3306,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME
+    };
+    
+    const result = await database.connect(dbConfig);
+    if (result.success) {
+      console.log('✅ Database auto-connected from .env');
+    } else {
+      console.error('❌ Database connection failed:', result.error);
+    }
   }
+  
+  // Initialize queue manager with config
+  const config = store.get('config') || {};
+  
+  // Add .env values to config
+  config.driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || config.driveFolderId;
+  
+  queueManager.setConfig(config);
   
   // Set queue update callback
   queueManager.setUpdateCallback((queue) => {
@@ -61,12 +82,15 @@ app.on('activate', () => {
 
 ipcMain.handle('get-config', async () => {
   const config = store.get('config');
-  const googleTokens = store.get('googleTokens');
-  const youtubeTokens = store.get('youtubeTokens');
+  
+  // Check token files
+  const googleTokenPath = path.join(__dirname, 'config', 'google_tokens.json');
+  const youtubeTokenPath = path.join(__dirname, 'config', 'youtube_tokens.json');
+  
   return {
     config: config || {},
-    hasGoogleAuth: !!googleTokens,
-    hasYoutubeAuth: !!youtubeTokens
+    hasGoogleAuth: fs.existsSync(googleTokenPath),
+    hasYoutubeAuth: fs.existsSync(youtubeTokenPath)
   };
 });
 
@@ -76,13 +100,17 @@ ipcMain.handle('save-config', async (event, config) => {
   return { success: true };
 });
 
-ipcMain.handle('connect-database', async (event, dbConfig) => {
+ipcMain.handle('connect-database', async () => {
+  // Read from .env
+  const dbConfig = {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME
+  };
+  
   const result = await database.connect(dbConfig);
-  if (result.success) {
-    const config = store.get('config') || {};
-    config.database = dbConfig;
-    store.set('config', config);
-  }
   return result;
 });
 
@@ -157,8 +185,9 @@ ipcMain.handle('google-auth-complete', async (event, code) => {
     const { credentials, oAuth2Client } = global.pendingOAuth;
     const tokens = await googleDrive.getTokenFromCode(oAuth2Client, code);
     
-    // Save tokens
-    store.set('googleTokens', tokens);
+    // Save tokens to config folder
+    const tokenPath = path.join(__dirname, 'config', 'google_tokens.json');
+    fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
     
     // Initialize drive
     await googleDrive.authenticate(credentials, tokens);
@@ -180,7 +209,13 @@ ipcMain.handle('google-auth-init', async () => {
     }
     
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
-    const tokens = store.get('googleTokens');
+    const tokenPath = path.join(__dirname, 'config', 'google_tokens.json');
+    
+    if (!fs.existsSync(tokenPath)) {
+      return { success: false, error: 'Not authenticated' };
+    }
+    
+    const tokens = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
     
     if (!tokens) {
       return { success: false, error: 'Not authenticated' };
@@ -226,7 +261,9 @@ ipcMain.handle('youtube-auth-complete', async (event, code) => {
     const { credentials, oAuth2Client } = global.pendingYouTubeOAuth;
     const tokens = await youtube.getTokenFromCode(oAuth2Client, code);
     
-    store.set('youtubeTokens', tokens);
+    // Save tokens to config folder
+    const tokenPath = path.join(__dirname, 'config', 'youtube_tokens.json');
+    fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
     await youtube.authenticate(credentials, tokens);
     
     delete global.pendingYouTubeOAuth;
@@ -246,7 +283,13 @@ ipcMain.handle('youtube-auth-init', async () => {
     }
     
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
-    const tokens = store.get('youtubeTokens');
+    const tokenPath = path.join(__dirname, 'config', 'youtube_tokens.json');
+    
+    if (!fs.existsSync(tokenPath)) {
+      return { success: false, error: 'Not authenticated' };
+    }
+    
+    const tokens = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
     
     if (!tokens) {
       return { success: false, error: 'Not authenticated' };

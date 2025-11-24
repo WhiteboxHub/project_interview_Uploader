@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
+require('dotenv').config();
 const { compressVideo } = require('./video_compressor');
 const { uploadToGoogleDrive } = require('./google_drive');
 const { uploadToYouTube } = require('./youtube');
@@ -158,7 +159,8 @@ class QueueManager {
       item.progress = 50;
       this.updateUI();
       
-      const driveFolderId = this.config.driveFolderId || null;
+      // Get Drive folder ID from .env or config
+      const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || this.config.driveFolderId || null;
       
       console.log('📤 Starting Google Drive upload...');
       const driveLink = await this.retryOperation(

@@ -22,11 +22,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadConfig() {
   const { config, hasGoogleAuth, hasYoutubeAuth } = await window.electron.getConfig();
   
-  if (config.database) {
-    const result = await window.electron.connectDatabase(config.database);
-    if (result.success) {
-      updateDBStatus(true);
-    }
+  // Auto-connect database from .env
+  const result = await window.electron.connectDatabase();
+  if (result.success) {
+    updateDBStatus(true);
   }
   
   if (hasGoogleAuth) {
@@ -142,20 +141,8 @@ function isVideoFile(filename) {
 async function openSettings() {
   const { config } = await window.electron.getConfig();
   
-  if (config.database) {
-    document.getElementById('dbHost').value = config.database.host || 'localhost';
-    document.getElementById('dbPort').value = config.database.port || 3306;
-    document.getElementById('dbUser').value = config.database.user || 'root';
-    document.getElementById('dbPassword').value = config.database.password || '';
-    document.getElementById('dbName').value = config.database.database || 'interviews';
-  }
-  
   if (config.compressedStorage) {
     document.getElementById('compressedStorage').value = config.compressedStorage;
-  }
-  
-  if (config.driveFolderId) {
-    document.getElementById('driveFolderId').value = config.driveFolderId;
   }
   
   document.getElementById('settingsModal').classList.add('active');
@@ -167,20 +154,12 @@ function closeSettings() {
 
 async function saveSettings() {
   const config = {
-    database: {
-      host: document.getElementById('dbHost').value,
-      port: parseInt(document.getElementById('dbPort').value),
-      user: document.getElementById('dbUser').value,
-      password: document.getElementById('dbPassword').value,
-      database: document.getElementById('dbName').value
-    },
-    compressedStorage: document.getElementById('compressedStorage').value,
-    driveFolderId: document.getElementById('driveFolderId').value
+    compressedStorage: document.getElementById('compressedStorage').value
   };
   
   await window.electron.saveConfig(config);
   closeSettings();
-  alert('Settings saved successfully');
+  alert('✅ Settings saved! Restart app to apply changes.');
 }
 
 async function browseDirectory(fieldId) {
@@ -196,19 +175,12 @@ async function toggleDatabase() {
     await window.electron.disconnectDatabase();
     updateDBStatus(false);
   } else {
-    const { config } = await window.electron.getConfig();
-    if (!config.database) {
-      alert('Please configure database settings first');
-      openSettings();
-      return;
-    }
-    
-    const result = await window.electron.connectDatabase(config.database);
+    const result = await window.electron.connectDatabase();
     if (result.success) {
       updateDBStatus(true);
-      alert('Database connected successfully');
+      alert('✅ Database connected successfully');
     } else {
-      alert('Database connection failed: ' + result.error);
+      alert('❌ Database connection failed: ' + result.error + '\n\nCheck .env file for correct credentials');
     }
   }
 }

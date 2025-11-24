@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('electron', {
   selectDirectory: (title) => ipcRenderer.invoke('select-directory', title),
   
   // Database
-  connectDatabase: (config) => ipcRenderer.invoke('connect-database', config),
+  connectDatabase: () => ipcRenderer.invoke('connect-database'),
   disconnectDatabase: () => ipcRenderer.invoke('disconnect-database'),
   testInterviewId: (id) => ipcRenderer.invoke('test-interview-id', id),
   

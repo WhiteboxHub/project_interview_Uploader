@@ -10,6 +10,8 @@ build/
 .env
 config/google_credentials.json
 config/youtube_credentials.json
+config/google_tokens.json
+config/youtube_tokens.json
 
 # Logs
 logs/
