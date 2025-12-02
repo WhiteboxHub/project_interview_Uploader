@@ -153,16 +153,16 @@ class QueueManager {
       console.log('✅ Compression result:', compressionResult);
       console.log('📁 Compressed file:', compressedPath);
       
-      // Step 2: Upload to Google Drive
+      // Step 2: Upload COMPRESSED to Google Drive
       item.status = 'uploading';
-      item.currentStep = 'Uploading to Google Drive...';
+      item.currentStep = 'Uploading to Google Drive (compressed)...';
       item.progress = 50;
       this.updateUI();
       
       // Get Drive folder ID from .env or config
       const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || this.config.driveFolderId || null;
       
-      console.log('📤 Starting Google Drive upload...');
+      console.log('📤 Starting Google Drive upload (compressed)...');
       const driveLink = await this.retryOperation(
         () => uploadToGoogleDrive(compressedPath, item.finalFileName, item.company, driveFolderId),
         3,
@@ -170,14 +170,14 @@ class QueueManager {
       );
       console.log('✅ Drive link:', driveLink);
       
-      // Step 3: Upload to YouTube
-      item.currentStep = 'Uploading to YouTube...';
+      // Step 3: Upload ORIGINAL to YouTube (no compression)
+      item.currentStep = 'Uploading to YouTube (original)...';
       item.progress = 75;
       this.updateUI();
       
-      console.log('🎥 Starting YouTube upload...');
+      console.log('🎥 Starting YouTube upload (original file)...');
       const youtubeLink = await this.retryOperation(
-        () => uploadToYouTube(compressedPath, item.finalFileName, item.company),
+        () => uploadToYouTube(item.originalFilePath, item.finalFileName, item.company),
         3,
         10000
       );
