@@ -43,9 +43,28 @@ function isVideoFile(filename) {
   return videoExtensions.includes(ext);
 }
 
+function generateTranscriptFileName(candidateName, company, interviewType, interviewDate) {
+  const safeName = sanitizeFilename(candidateName);
+  const safeCompany = sanitizeFilename(company);
+  const safeType = sanitizeFilename(interviewType.replace(/\s+/g, '_'));
+  
+  // Format date properly
+  let formattedDate;
+  if (typeof interviewDate === 'string') {
+    formattedDate = interviewDate.split('T')[0];
+  } else if (interviewDate instanceof Date) {
+    formattedDate = interviewDate.toISOString().split('T')[0];
+  } else {
+    formattedDate = interviewDate;
+  }
+  
+  return `transcript_${safeName}_${safeCompany}_${safeType}_${formattedDate}.txt`;
+}
+
 module.exports = {
   sanitizeFilename,
   generateFileName,
+  generateTranscriptFileName,
   ensureDirectoryExists,
   isVideoFile
 };

@@ -89,14 +89,15 @@ async function uploadFile(filePath, fileName, folderId) {
   };
   
   const media = {
-    mimeType: 'video/mp4',
+    mimeType: fileName.endsWith('.txt') ? 'text/plain' : 'video/mp4',
     body: fs.createReadStream(filePath)
   };
   
   const file = await drive.files.create({
     resource: fileMetadata,
     media: media,
-    fields: 'id'
+    fields: 'id',
+    timeout: 300000 // 5 min timeout
   });
   
   return file.data.id;
@@ -105,18 +106,13 @@ async function uploadFile(filePath, fileName, folderId) {
 async function makePublic(fileId) {
   if (!drive) throw new Error('Drive not initialized');
   
-  try {
-    await drive.permissions.create({
-      fileId: fileId,
-      requestBody: {
-        role: 'reader',
-        type: 'anyone'
-      }
-    });
-  } catch (error) {
-    console.warn('Could not make file public (may need domain admin):', error.message);
-    // Continue anyway - file uploaded, just not public
-  }
+  await drive.permissions.create({
+    fileId: fileId,
+    requestBody: {
+      role: 'reader',
+      type: 'anyone'
+    }
+  });
 }
 
 async function uploadToGoogleDrive(filePath, fileName, companyName, targetFolderId = null) {
@@ -137,7 +133,7 @@ async function uploadToGoogleDrive(filePath, fileName, companyName, targetFolder
     const fileId = await uploadFile(filePath, fileName, uploadFolderId);
     
     // DON'T make public - keep restricted to owner only
-    // await makePublic(fileId); // COMMENTED OUT
+    // Transcripts use separate function with public access
     
     // Return file link (only accessible to owner)
     return `https://drive.google.com/file/d/${fileId}/view`;
@@ -146,9 +142,26 @@ async function uploadToGoogleDrive(filePath, fileName, companyName, targetFolder
   }
 }
 
+async function uploadTranscriptToGoogleDrive(filePath, fileName, companyName, targetFolderId = null) {
+  try {
+    // Always upload to root or specified folder - no subfolders
+    const uploadFolderId = targetFolderId || 'root';
+    
+    const fileId = await uploadFile(filePath, fileName, uploadFolderId);
+    
+    // Make transcripts PUBLIC (anyone with link)
+    await makePublic(fileId);
+    
+    return `https://drive.google.com/file/d/${fileId}/view`;
+  } catch (error) {
+    throw new Error(`Transcript upload failed: ${error.message}`);
+  }
+}
+
 module.exports = {
   authenticate,
   getAuthUrl,
   getTokenFromCode,
-  uploadToGoogleDrive
+  uploadToGoogleDrive,
+  uploadTranscriptToGoogleDrive
 };

@@ -4,6 +4,7 @@ const Store = require('electron-store');
 const database = require('./services/database');
 const googleDrive = require('./services/google_drive');
 const youtube = require('./services/youtube');
+const transcription = require('./services/transcription');
 const queueManager = require('./services/queue_manager');
 const fs = require('fs');
 require('dotenv').config();
@@ -57,6 +58,22 @@ app.whenReady().then(async () => {
   config.driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || config.driveFolderId;
   
   queueManager.setConfig(config);
+  
+  // Initialize Whisper.cpp if configured
+  if (process.env.WHISPER_CPP_PATH && process.env.WHISPER_MODEL_PATH) {
+    const whisperResult = await transcription.initializeWhisper(
+      process.env.WHISPER_CPP_PATH,
+      process.env.WHISPER_MODEL_PATH
+    );
+    
+    if (whisperResult.success) {
+      console.log('✅ Transcription enabled');
+    } else {
+      console.warn('⚠️ Transcription disabled:', whisperResult.error);
+    }
+  } else {
+    console.log('ℹ️ Whisper not configured - transcription disabled');
+  }
   
   // Set queue update callback
   queueManager.setUpdateCallback((queue) => {

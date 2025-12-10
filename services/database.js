@@ -61,18 +61,18 @@ async function getInterviewDetails(interviewId) {
   return interview;
 }
 
-async function updateRecordingLinks(interviewId, driveLink, backupPath) {
+async function updateRecordingLinks(interviewId, driveLink, backupPath, transcriptLink = null) {
   if (!connection) {
     throw new Error('Database not connected');
   }
   
   const query = `
     UPDATE candidate_interview
-    SET recording_link = ?, backup_recording_url = ?
+    SET recording_link = ?, backup_recording_url = ?, transcript = ?
     WHERE id = ?
   `;
   
-  await connection.execute(query, [driveLink, backupPath, interviewId]);
+  await connection.execute(query, [driveLink, backupPath, transcriptLink, interviewId]);
 }
 
 async function disconnect() {

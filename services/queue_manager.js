@@ -3,9 +3,10 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 const { compressVideo } = require('./video_compressor');
-const { uploadToGoogleDrive } = require('./google_drive');
+const { uploadToGoogleDrive, uploadTranscriptToGoogleDrive } = require('./google_drive');
 const { uploadToYouTube } = require('./youtube');
-const { generateFileName } = require('./file_manager');
+const { generateFileName, generateTranscriptFileName } = require('./file_manager');
+const { transcribeVideo, initializeWhisper } = require('./transcription');
 const { getInterviewDetails, updateRecordingLinks } = require('./database');
 const Store = require('electron-store');
 
@@ -183,16 +184,99 @@ class QueueManager {
       );
       console.log('✅ YouTube link:', youtubeLink);
       
-      // Step 4: Update database
+      // Step 4: Transcribe video
+      item.currentStep = 'Transcribing audio...';
+      item.progress = 80;
+      this.updateUI();
+      
+      let transcriptLink = null;
+      
+      if (process.env.WHISPER_CPP_PATH && process.env.WHISPER_MODEL_PATH) {
+        try {
+          // Ensure Whisper is initialized
+          await initializeWhisper(
+            process.env.WHISPER_CPP_PATH,
+            process.env.WHISPER_MODEL_PATH
+          );
+          
+          console.log('🎤 Starting transcription...');
+          
+          const transcriptFileName = generateTranscriptFileName(
+            item.candidateName,
+            item.company,
+            item.interviewType,
+            item.interviewDate
+          );
+          const transcriptPath = path.join(
+            this.config.compressedStorage,
+            'transcripts',
+            transcriptFileName
+          );
+          
+          // Ensure transcript directory exists
+          const transcriptDir = path.dirname(transcriptPath);
+          if (!fs.existsSync(transcriptDir)) {
+            fs.mkdirSync(transcriptDir, { recursive: true });
+          }
+          
+          // Transcribe
+          const transcriptResult = await transcribeVideo(
+            item.originalFilePath,
+            transcriptPath,
+            (progress) => {
+              item.progress = 80 + (progress * 0.1); // 80-90%
+              item.currentStep = `Transcribing: ${progress}%`;
+              this.updateUI();
+            }
+          );
+          
+          console.log('✅ Transcription complete:', transcriptResult.transcriptPath);
+          console.log('📝 Transcript text length:', transcriptResult.text?.length || 0);
+          
+          // Verify transcript file exists before uploading
+          if (!fs.existsSync(transcriptResult.transcriptPath)) {
+            throw new Error(`Transcript file not found at: ${transcriptResult.transcriptPath}`);
+          }
+          
+          // Upload transcript to Drive
+          item.currentStep = 'Uploading transcript to Drive...';
+          item.progress = 90;
+          this.updateUI();
+          
+          const transcriptFolderId = process.env.TRANSCRIPT_DRIVE_FOLDER_ID || null;
+          
+          // Use the actual transcript path from the result
+          transcriptLink = await this.retryOperation(
+            () => uploadTranscriptToGoogleDrive(
+              transcriptResult.transcriptPath, 
+              path.basename(transcriptResult.transcriptPath), 
+              item.company, 
+              transcriptFolderId
+            ),
+            3,
+            10000
+          );
+          
+          console.log('✅ Transcript link:', transcriptLink);
+          
+        } catch (error) {
+          console.error('⚠️ Transcription failed:', error.message);
+          // Continue without transcript
+        }
+      } else {
+        console.log('⏭️ Whisper not configured, skipping transcription');
+      }
+      
+      // Step 5: Update database
       item.currentStep = 'Updating database...';
-      item.progress = 90;
+      item.progress = 95;
       this.updateUI();
       
       console.log('💾 Updating database...');
-      await updateRecordingLinks(item.interviewId, driveLink, youtubeLink);
+      await updateRecordingLinks(item.interviewId, driveLink, youtubeLink, transcriptLink);
       console.log('✅ Database updated!');
       
-      // Step 5: Schedule original deletion
+      // Step 6: Schedule original deletion
       this.scheduleFileDeletion(item.originalFilePath, 50);
       
       // Mark complete
