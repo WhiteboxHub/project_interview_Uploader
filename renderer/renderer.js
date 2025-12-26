@@ -1,5 +1,5 @@
 // State
-let dbConnected = false;
+let apiConnected = false;
 let driveConnected = false;
 let youtubeConnected = false;
 let pendingFile = null;
@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupDropZone();
   loadQueue();
-  
+
   // Listen for queue updates
   window.electron.onQueueUpdate((queue) => {
     renderQueue(queue);
@@ -21,20 +21,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Load saved configuration
 async function loadConfig() {
   const { config, hasGoogleAuth, hasYoutubeAuth } = await window.electron.getConfig();
-  
-  // Auto-connect database from .env
-  const result = await window.electron.connectDatabase();
+
+  // Auto-login to API from .env
+  const result = await window.electron.loginAPI();
   if (result.success) {
-    updateDBStatus(true);
+    updateAPIStatus(true);
   }
-  
+
   if (hasGoogleAuth) {
     const result = await window.electron.googleAuthInit();
     if (result.success) {
       updateDriveStatus(true);
     }
   }
-  
+
   if (hasYoutubeAuth) {
     const result = await window.electron.youtubeAuthInit();
     if (result.success) {
@@ -50,37 +50,37 @@ function setupEventListeners() {
   document.querySelector('.modal-close').addEventListener('click', closeSettings);
   document.getElementById('cancelSettings').addEventListener('click', closeSettings);
   document.getElementById('saveSettings').addEventListener('click', saveSettings);
-  
-  // Database
-  document.getElementById('dbConnectBtn').addEventListener('click', toggleDatabase);
-  
+
+  // API Authentication
+  document.getElementById('apiConnectBtn').addEventListener('click', toggleAPI);
+
   // Google Drive
   document.getElementById('driveAuthBtn').addEventListener('click', authenticateGoogleDrive);
-  
+
   // YouTube
   document.getElementById('youtubeAuthBtn').addEventListener('click', authenticateYouTube);
-  
+
   // Interview ID Modal
   document.getElementById('cancelId').addEventListener('click', closeIdModal);
   document.getElementById('submitId').addEventListener('click', submitInterviewId);
   document.getElementById('interviewId').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') submitInterviewId();
   });
-  
+
   // Preview Modal
   document.getElementById('cancelPreview').addEventListener('click', closePreviewModal);
   document.getElementById('confirmPreview').addEventListener('click', confirmPreview);
-  
+
   // Queue
   document.getElementById('clearCompletedBtn').addEventListener('click', clearCompleted);
-  
+
   // Browse buttons
   document.getElementById('browseCompressed').addEventListener('click', () => browseDirectory('compressedStorage'));
-  
+
   // Auth modal handlers
   document.getElementById('authCancel').addEventListener('click', closeAuthModal);
   document.getElementById('authSubmit').addEventListener('click', submitAuthCode);
-  
+
   // Upload bar close button
   document.getElementById('uploadClose').addEventListener('click', () => {
     document.getElementById('uploadBar').style.display = 'none';
@@ -90,37 +90,37 @@ function setupEventListeners() {
 // Drop Zone Setup
 function setupDropZone() {
   const dropZone = document.getElementById('dropZone');
-  
+
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropZone.classList.add('drag-over');
   });
-  
+
   dropZone.addEventListener('dragleave', () => {
     dropZone.classList.remove('drag-over');
   });
-  
+
   dropZone.addEventListener('drop', async (e) => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
-    
-    if (!dbConnected) {
-      alert('Please connect to database first');
+
+    if (!apiConnected) {
+      alert('Please login to API first');
       return;
     }
-    
+
     if (!driveConnected) {
       alert('Please authenticate Google Drive first');
       return;
     }
-    
+
     if (!youtubeConnected) {
       alert('Please authenticate YouTube first');
       return;
     }
-    
+
     const files = Array.from(e.dataTransfer.files);
-    
+
     for (const file of files) {
       if (isVideoFile(file.name)) {
         pendingFile = file.path;
@@ -133,18 +133,19 @@ function setupDropZone() {
 
 function isVideoFile(filename) {
   const videoExtensions = ['.mp4', '.mov', '.mkv', '.avi', '.wmv', '.flv', '.webm'];
+  const audioExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg'];
   const ext = filename.toLowerCase().substring(filename.lastIndexOf('.'));
-  return videoExtensions.includes(ext);
+  return videoExtensions.includes(ext) || audioExtensions.includes(ext);
 }
 
 // Settings Modal
 async function openSettings() {
   const { config } = await window.electron.getConfig();
-  
+
   if (config.compressedStorage) {
     document.getElementById('compressedStorage').value = config.compressedStorage;
   }
-  
+
   document.getElementById('settingsModal').classList.add('active');
 }
 
@@ -156,7 +157,7 @@ async function saveSettings() {
   const config = {
     compressedStorage: document.getElementById('compressedStorage').value
   };
-  
+
   await window.electron.saveConfig(config);
   closeSettings();
   alert('✅ Settings saved! Restart app to apply changes.');
@@ -169,50 +170,50 @@ async function browseDirectory(fieldId) {
   }
 }
 
-// Database Connection
-async function toggleDatabase() {
-  if (dbConnected) {
-    await window.electron.disconnectDatabase();
-    updateDBStatus(false);
+// API Authentication
+async function toggleAPI() {
+  if (apiConnected) {
+    await window.electron.logoutAPI();
+    updateAPIStatus(false);
   } else {
-    const result = await window.electron.connectDatabase();
+    const result = await window.electron.loginAPI();
     if (result.success) {
-      updateDBStatus(true);
-      alert('✅ Database connected successfully');
+      updateAPIStatus(true);
+      alert('✅ API authenticated successfully');
     } else {
-      alert('❌ Database connection failed: ' + result.error + '\n\nCheck .env file for correct credentials');
+      alert('❌ API authentication failed: ' + result.error + '\n\nCheck .env file for correct credentials');
     }
   }
 }
 
-function updateDBStatus(connected) {
-  dbConnected = connected;
-  const statusEl = document.getElementById('dbStatus');
-  const btnEl = document.getElementById('dbConnectBtn');
-  
+function updateAPIStatus(connected) {
+  apiConnected = connected;
+  const statusEl = document.getElementById('apiStatus');
+  const btnEl = document.getElementById('apiConnectBtn');
+
   if (connected) {
-    statusEl.textContent = '● Connected';
+    statusEl.textContent = '● Authenticated';
     statusEl.className = 'status-value status-connected';
-    btnEl.textContent = 'Disconnect';
+    btnEl.textContent = 'Logout';
   } else {
-    statusEl.textContent = '● Disconnected';
+    statusEl.textContent = '● Not Authenticated';
     statusEl.className = 'status-value status-disconnected';
-    btnEl.textContent = 'Connect';
+    btnEl.textContent = 'Login';
   }
 }
 
 // Google Drive Authentication
 async function authenticateGoogleDrive() {
   const result = await window.electron.googleAuthStart();
-  
+
   if (!result.success) {
     alert('❌ Authentication failed: ' + result.error);
     return;
   }
-  
+
   // Open browser
   await window.electron.openExternal(result.authUrl);
-  
+
   // Show dialog with retry
   let attempts = 0;
   while (attempts < 3) {
@@ -226,7 +227,7 @@ async function authenticateGoogleDrive() {
         '4. Paste below<br><br>' +
         '<small style="color: #666;">Code format: 4/0AX4XfW...</small>'
       );
-      
+
       const authResult = await window.electron.googleAuthComplete(code);
       if (authResult.success) {
         updateDriveStatus(true);
@@ -253,7 +254,7 @@ function updateDriveStatus(connected) {
   driveConnected = connected;
   const statusEl = document.getElementById('driveStatus');
   const btnEl = document.getElementById('driveAuthBtn');
-  
+
   if (connected) {
     statusEl.textContent = '● Connected';
     statusEl.className = 'status-value status-connected';
@@ -283,38 +284,38 @@ async function submitInterviewId() {
   console.log('🔍 Submit ID clicked');
   const interviewId = document.getElementById('interviewId').value;
   const errorEl = document.getElementById('idError');
-  
+
   if (!interviewId) {
     errorEl.textContent = 'Please enter an interview ID';
     errorEl.style.display = 'block';
     return;
   }
-  
+
   console.log('📊 Testing interview ID:', interviewId);
-  
+
   // Validate ID
   const result = await window.electron.testInterviewId(parseInt(interviewId));
-  
+
   console.log('📥 Test result:', result);
-  
+
   if (!result.success) {
     console.error('❌ ID validation failed:', result.error);
-    errorEl.textContent = result.error || 'Interview ID not found in database';
+    errorEl.textContent = result.error || 'Interview ID not found in API';
     errorEl.style.display = 'block';
     return;
   }
-  
+
   console.log('✅ ID validated, details:', result.details);
-  
+
   // Show preview
   previewData = {
     interviewId: parseInt(interviewId),
     details: result.details,
     filePath: pendingFile
   };
-  
+
   console.log('📦 Preview data set:', previewData);
-  
+
   closeIdModal();
   openPreviewModal();
 }
@@ -322,17 +323,17 @@ async function submitInterviewId() {
 // Preview Modal
 function openPreviewModal() {
   const { interviewId, details } = previewData;
-  
+
   document.getElementById('previewId').textContent = interviewId;
   document.getElementById('previewCandidate').textContent = details.full_name;
   document.getElementById('previewCompany').textContent = details.company;
   document.getElementById('previewType').textContent = details.type_of_interview;
   document.getElementById('previewDate').textContent = details.interview_date;
-  
+
   // Generate filename preview
   const filename = generateFilename(details);
   document.getElementById('previewFilename').textContent = filename;
-  
+
   document.getElementById('previewModal').classList.add('active');
 }
 
@@ -344,25 +345,25 @@ function closePreviewModal() {
 async function confirmPreview() {
   console.log('=== CONFIRM PREVIEW CLICKED ===');
   console.log('📦 Preview data:', previewData);
-  
+
   if (!previewData) {
     console.error('❌ No preview data!');
     alert('Error: No preview data available');
     return;
   }
-  
+
   // Save data BEFORE closing modal
   const { interviewId, filePath } = previewData;
-  
+
   closePreviewModal();
-  
+
   console.log('📤 Calling addVideoToQueue:', { filePath, interviewId });
   console.log('📤 File exists?', filePath);
-  
+
   try {
     const result = await window.electron.addVideoToQueue(filePath, interviewId);
     console.log('📥 Result:', result);
-    
+
     if (!result.success) {
       console.error('❌ Failed:', result.error);
       alert('❌ Failed to add video to queue: ' + result.error);
@@ -374,7 +375,7 @@ async function confirmPreview() {
     console.error('❌ Exception:', error);
     alert('Error: ' + error.message);
   }
-  
+
   previewData = null;
   pendingFile = null;
 }
@@ -388,11 +389,11 @@ function generateFilename(details) {
       .replace(/&/g, 'and')
       .replace(/_+/g, '_');
   };
-  
+
   const name = sanitize(details.full_name);
   const company = sanitize(details.company);
   const type = sanitize(details.type_of_interview.replace(/\s+/g, '_'));
-  
+
   return `${name}_${company}_${type}_${details.interview_date}.mp4`;
 }
 
@@ -405,15 +406,15 @@ async function loadQueue() {
 function renderQueue(queue) {
   const queueList = document.getElementById('queueList');
   const queueCount = document.getElementById('queueCount');
-  
+
   queueCount.textContent = queue.length;
-  
+
   // Update upload bar for active processing
-  const activeItem = queue.find(item => 
-    item.status === 'compressing' || 
+  const activeItem = queue.find(item =>
+    item.status === 'compressing' ||
     item.status === 'uploading'
   );
-  
+
   if (activeItem) {
     showUploadBar(activeItem);
   } else if (queue.some(item => item.status === 'completed')) {
@@ -426,16 +427,16 @@ function renderQueue(queue) {
       }, 3000);
     }
   }
-  
+
   if (queue.length === 0) {
     queueList.innerHTML = '<div class="empty-queue">No videos in queue</div>';
     return;
   }
-  
+
   queueList.innerHTML = queue.map(item => {
     const statusClass = item.status;
     const statusText = item.status.charAt(0).toUpperCase() + item.status.slice(1);
-    
+
     return `
       <div class="queue-item status-${statusClass}">
         <div class="queue-item-header">
@@ -474,7 +475,7 @@ function showAuthModal(title, instructions) {
   return new Promise((resolve, reject) => {
     authModalResolve = resolve;
     authModalReject = reject;
-    
+
     document.getElementById('authModalTitle').textContent = title;
     document.getElementById('authModalInstructions').innerHTML = instructions;
     document.getElementById('authCode').value = '';
@@ -495,13 +496,13 @@ function closeAuthModal() {
 
 function submitAuthCode() {
   const code = document.getElementById('authCode').value.trim();
-  
+
   if (!code) {
     document.getElementById('authError').textContent = 'Please paste the authorization code';
     document.getElementById('authError').style.display = 'block';
     return;
   }
-  
+
   document.getElementById('authModal').classList.remove('active');
   if (authModalResolve) {
     authModalResolve(code);
@@ -513,15 +514,15 @@ function submitAuthCode() {
 // YouTube Authentication
 async function authenticateYouTube() {
   const result = await window.electron.youtubeAuthStart();
-  
+
   if (!result.success) {
     alert('❌ YouTube authentication failed: ' + result.error);
     return;
   }
-  
+
   // Open browser
   await window.electron.openExternal(result.authUrl);
-  
+
   // Show dialog with retry
   let attempts = 0;
   while (attempts < 3) {
@@ -535,7 +536,7 @@ async function authenticateYouTube() {
         '4. Paste below<br><br>' +
         '<small style="color: #666;">Code format: 4/0AX4XfW...</small>'
       );
-      
+
       const authResult = await window.electron.youtubeAuthComplete(code);
       if (authResult.success) {
         updateYoutubeStatus(true);
@@ -562,7 +563,7 @@ function updateYoutubeStatus(connected) {
   youtubeConnected = connected;
   const statusEl = document.getElementById('youtubeStatus');
   const btnEl = document.getElementById('youtubeAuthBtn');
-  
+
   if (connected) {
     statusEl.textContent = '● Connected';
     statusEl.className = 'status-value status-connected';
@@ -578,10 +579,10 @@ function updateYoutubeStatus(connected) {
 function showUploadBar(item) {
   const bar = document.getElementById('uploadBar');
   bar.style.display = 'block';
-  
+
   // Update filename
   document.getElementById('uploadFilename').textContent = item.finalFileName;
-  
+
   // Update status text
   let statusText = item.currentStep;
   if (item.status === 'completed') {
@@ -590,13 +591,13 @@ function showUploadBar(item) {
     statusText = '❌ Upload failed: ' + item.error;
   }
   document.getElementById('uploadStatus').textContent = statusText;
-  
+
   // Update progress
   const progressFill = document.getElementById('uploadProgressFill');
   const progressText = document.getElementById('uploadPercentage');
   progressFill.style.width = item.progress + '%';
   progressText.textContent = item.progress + '%';
-  
+
   // Hide spinner when complete
   const spinner = document.querySelector('.spinner');
   if (item.status === 'completed' || item.status === 'failed') {

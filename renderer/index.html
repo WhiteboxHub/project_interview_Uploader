@@ -19,9 +19,9 @@
     <!-- Status Bar -->
     <div class="status-bar">
       <div class="status-item">
-        <span class="status-label">Database:</span>
-        <span id="dbStatus" class="status-value status-disconnected">● Disconnected</span>
-        <button id="dbConnectBtn" class="btn btn-small">Connect</button>
+        <span class="status-label">API:</span>
+        <span id="apiStatus" class="status-value status-disconnected">● Not Authenticated</span>
+        <button id="apiConnectBtn" class="btn btn-small">Login</button>
       </div>
       <div class="status-item">
         <span class="status-label">Google Drive:</span>
@@ -92,8 +92,8 @@
         <div class="settings-section">
           <h3>Configuration</h3>
           <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
-            📄 <strong>Database credentials</strong> are configured in <code>.env</code> file<br>
-            Edit <code>.env</code> to set MySQL host, port, user, password, database
+            📝 <strong>API credentials</strong> are configured in <code>.env</code> file<br>
+            Edit <code>.env</code> to set API_BASE_URL, API_EMAIL, API_PASSWORD
           </p>
         </div>
 

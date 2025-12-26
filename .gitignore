@@ -5,7 +5,7 @@ node_modules/
 dist/
 build/
 *.exe
-
+*.txt
 # Environment & Secrets
 .env
 config/google_credentials.json
@@ -31,5 +31,6 @@ Thumbs.db
 # Temp Files
 temp/
 *.tmp
-
 *.md
+
+/Users/innovapathinc/Desktop/interview_uploader/interview-uploader/fix_whisper.sh

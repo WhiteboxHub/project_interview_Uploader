@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
-const database = require('./services/database');
+const apiAuth = require('./services/api_auth');
+const apiClient = require('./services/api_client');
 const googleDrive = require('./services/google_drive');
 const youtube = require('./services/youtube');
 const transcription = require('./services/transcription');
@@ -25,47 +26,50 @@ function createWindow() {
   });
 
   mainWindow.loadFile('renderer/index.html');
-  
+
   // Always open DevTools for debugging
   mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(async () => {
   createWindow();
-  
-  // Auto-connect database from .env
-  if (process.env.DB_HOST) {
-    const dbConfig = {
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT) || 3306,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME
-    };
-    
-    const result = await database.connect(dbConfig);
+
+  // Auto-login to API from .env
+  if (process.env.API_BASE_URL && process.env.API_EMAIL && process.env.API_PASSWORD) {
+    console.log('📦 Auto-authenticating to API from .env...');
+
+    apiAuth.initialize(
+      process.env.API_BASE_URL,
+      process.env.API_EMAIL,
+      process.env.API_PASSWORD
+    );
+
+    apiClient.initialize(process.env.API_BASE_URL);
+
+    const result = await apiAuth.login();
     if (result.success) {
-      console.log('✅ Database auto-connected from .env');
+      console.log('✅ API authentication successful');
+      console.log('👤 Team:', result.team);
     } else {
-      console.error('❌ Database connection failed:', result.error);
+      console.error('❌ API authentication failed:', result.error);
     }
   }
-  
+
   // Initialize queue manager with config
   const config = store.get('config') || {};
-  
+
   // Add .env values to config
   config.driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || config.driveFolderId;
-  
+
   queueManager.setConfig(config);
-  
+
   // Initialize Whisper.cpp if configured
   if (process.env.WHISPER_CPP_PATH && process.env.WHISPER_MODEL_PATH) {
     const whisperResult = await transcription.initializeWhisper(
       process.env.WHISPER_CPP_PATH,
       process.env.WHISPER_MODEL_PATH
     );
-    
+
     if (whisperResult.success) {
       console.log('✅ Transcription enabled');
     } else {
@@ -74,7 +78,7 @@ app.whenReady().then(async () => {
   } else {
     console.log('ℹ️ Whisper not configured - transcription disabled');
   }
-  
+
   // Set queue update callback
   queueManager.setUpdateCallback((queue) => {
     if (mainWindow) {
@@ -99,11 +103,11 @@ app.on('activate', () => {
 
 ipcMain.handle('get-config', async () => {
   const config = store.get('config');
-  
+
   // Check token files
   const googleTokenPath = path.join(__dirname, 'config', 'google_tokens.json');
   const youtubeTokenPath = path.join(__dirname, 'config', 'youtube_tokens.json');
-  
+
   return {
     config: config || {},
     hasGoogleAuth: fs.existsSync(googleTokenPath),
@@ -117,28 +121,29 @@ ipcMain.handle('save-config', async (event, config) => {
   return { success: true };
 });
 
-ipcMain.handle('connect-database', async () => {
-  // Read from .env
-  const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
-  };
-  
-  const result = await database.connect(dbConfig);
+ipcMain.handle('login-api', async () => {
+  console.log('Logging in to API...');
+
+  apiAuth.initialize(
+    process.env.API_BASE_URL,
+    process.env.API_EMAIL,
+    process.env.API_PASSWORD
+  );
+
+  apiClient.initialize(process.env.API_BASE_URL);
+
+  const result = await apiAuth.login();
   return result;
 });
 
-ipcMain.handle('disconnect-database', async () => {
-  await database.disconnect();
+ipcMain.handle('logout-api', async () => {
+  apiAuth.logout();
   return { success: true };
 });
 
 ipcMain.handle('test-interview-id', async (event, interviewId) => {
   try {
-    const details = await database.getInterviewDetails(interviewId);
+    const details = await apiClient.getInterviewDetails(interviewId);
     return { success: true, details };
   } catch (error) {
     return { success: false, error: error.message };
@@ -163,7 +168,7 @@ ipcMain.handle('select-directory', async (event, title) => {
     properties: ['openDirectory'],
     title: title || 'Select Directory'
   });
-  
+
   if (!result.canceled && result.filePaths.length > 0) {
     return { success: true, path: result.filePaths[0] };
   }
@@ -173,20 +178,20 @@ ipcMain.handle('select-directory', async (event, title) => {
 ipcMain.handle('google-auth-start', async () => {
   try {
     const credentialsPath = path.join(__dirname, 'config', 'google_credentials.json');
-    
+
     if (!fs.existsSync(credentialsPath)) {
-      return { 
-        success: false, 
-        error: 'Google credentials file not found. Please add google_credentials.json to config folder.' 
+      return {
+        success: false,
+        error: 'Google credentials file not found. Please add google_credentials.json to config folder.'
       };
     }
-    
+
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     const { authUrl, oAuth2Client } = await googleDrive.getAuthUrl(credentials);
-    
+
     // Store the oAuth2Client temporarily
     global.pendingOAuth = { credentials, oAuth2Client };
-    
+
     return { success: true, authUrl };
   } catch (error) {
     return { success: false, error: error.message };
@@ -198,19 +203,19 @@ ipcMain.handle('google-auth-complete', async (event, code) => {
     if (!global.pendingOAuth) {
       throw new Error('No pending OAuth session');
     }
-    
+
     const { credentials, oAuth2Client } = global.pendingOAuth;
     const tokens = await googleDrive.getTokenFromCode(oAuth2Client, code);
-    
+
     // Save tokens to config folder
     const tokenPath = path.join(__dirname, 'config', 'google_tokens.json');
     fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
-    
+
     // Initialize drive
     await googleDrive.authenticate(credentials, tokens);
-    
+
     delete global.pendingOAuth;
-    
+
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -220,26 +225,26 @@ ipcMain.handle('google-auth-complete', async (event, code) => {
 ipcMain.handle('google-auth-init', async () => {
   try {
     const credentialsPath = path.join(__dirname, 'config', 'google_credentials.json');
-    
+
     if (!fs.existsSync(credentialsPath)) {
       return { success: false, error: 'Credentials file not found' };
     }
-    
+
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     const tokenPath = path.join(__dirname, 'config', 'google_tokens.json');
-    
+
     if (!fs.existsSync(tokenPath)) {
       return { success: false, error: 'Not authenticated' };
     }
-    
+
     const tokens = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
-    
+
     if (!tokens) {
       return { success: false, error: 'Not authenticated' };
     }
-    
+
     await googleDrive.authenticate(credentials, tokens);
-    
+
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -250,19 +255,19 @@ ipcMain.handle('google-auth-init', async () => {
 ipcMain.handle('youtube-auth-start', async () => {
   try {
     const credentialsPath = path.join(__dirname, 'config', 'youtube_credentials.json');
-    
+
     if (!fs.existsSync(credentialsPath)) {
-      return { 
-        success: false, 
-        error: 'YouTube credentials file not found. Please add youtube_credentials.json to config folder.' 
+      return {
+        success: false,
+        error: 'YouTube credentials file not found. Please add youtube_credentials.json to config folder.'
       };
     }
-    
+
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     const { authUrl, oAuth2Client } = await youtube.getAuthUrl(credentials);
-    
+
     global.pendingYouTubeOAuth = { credentials, oAuth2Client };
-    
+
     return { success: true, authUrl };
   } catch (error) {
     return { success: false, error: error.message };
@@ -274,17 +279,17 @@ ipcMain.handle('youtube-auth-complete', async (event, code) => {
     if (!global.pendingYouTubeOAuth) {
       throw new Error('No pending OAuth session');
     }
-    
+
     const { credentials, oAuth2Client } = global.pendingYouTubeOAuth;
     const tokens = await youtube.getTokenFromCode(oAuth2Client, code);
-    
+
     // Save tokens to config folder
     const tokenPath = path.join(__dirname, 'config', 'youtube_tokens.json');
     fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
     await youtube.authenticate(credentials, tokens);
-    
+
     delete global.pendingYouTubeOAuth;
-    
+
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -294,26 +299,26 @@ ipcMain.handle('youtube-auth-complete', async (event, code) => {
 ipcMain.handle('youtube-auth-init', async () => {
   try {
     const credentialsPath = path.join(__dirname, 'config', 'youtube_credentials.json');
-    
+
     if (!fs.existsSync(credentialsPath)) {
       return { success: false, error: 'Credentials file not found' };
     }
-    
+
     const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     const tokenPath = path.join(__dirname, 'config', 'youtube_tokens.json');
-    
+
     if (!fs.existsSync(tokenPath)) {
       return { success: false, error: 'Not authenticated' };
     }
-    
+
     const tokens = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
-    
+
     if (!tokens) {
       return { success: false, error: 'Not authenticated' };
     }
-    
+
     await youtube.authenticate(credentials, tokens);
-    
+
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
