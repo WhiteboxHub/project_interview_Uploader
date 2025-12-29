@@ -134,8 +134,14 @@ class QueueManager {
       item.currentStep = 'Compressing video...';
       this.updateUI();
 
+      // Organize compressed videos in a 'videos' subdirectory
+      const videosDir = path.join(this.config.compressedStorage, 'videos');
+      if (!fs.existsSync(videosDir)) {
+        fs.mkdirSync(videosDir, { recursive: true });
+      }
+
       const compressedPath = path.join(
-        this.config.compressedStorage,
+        videosDir,
         item.finalFileName
       );
 
@@ -251,19 +257,21 @@ class QueueManager {
             throw new Error(`Transcript file not found at: ${transcriptResult.transcriptPath}`);
           }
 
-          // Upload transcript to Drive (same folder as recording)
+          // Upload transcript to Drive (restricted folder)
           item.currentStep = 'Uploading transcript to Drive...';
           item.progress = 90;
           this.updateUI();
 
-          // Use the same folder ID as the recording upload
-          // This ensures transcripts are stored alongside recordings in the same company folder
+          // Use separate transcript folder ID from .env
+          // Falls back to same folder as videos if not specified
+          const transcriptFolderId = process.env.TRANSCRIPT_DRIVE_FOLDER_ID || driveFolderId;
+
           transcriptLink = await this.retryOperation(
             () => uploadTranscriptToGoogleDrive(
               transcriptResult.transcriptPath,
               path.basename(transcriptResult.transcriptPath),
               item.company,
-              driveFolderId  // Use same folder ID as recording
+              transcriptFolderId  // Use dedicated transcript folder ID
             ),
             3,
             10000

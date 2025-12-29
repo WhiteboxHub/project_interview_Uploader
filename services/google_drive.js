@@ -120,10 +120,11 @@ async function uploadToGoogleDrive(filePath, fileName, companyName, targetFolder
     let uploadFolderId;
 
     if (targetFolderId) {
-      // Use specific folder ID from config
+      // Use specific restricted folder ID from .env (GOOGLE_DRIVE_FOLDER_ID)
+      // This folder should be set to owner-only access for privacy
       uploadFolderId = targetFolderId;
     } else {
-      // Fallback: Get or create base folder
+      // Fallback: Get or create base folder (for backward compatibility)
       const baseFolderId = await findOrCreateFolder('Interview_Recordings');
       // Get or create company folder
       uploadFolderId = await findOrCreateFolder(companyName, baseFolderId);
@@ -133,7 +134,7 @@ async function uploadToGoogleDrive(filePath, fileName, companyName, targetFolder
     const fileId = await uploadFile(filePath, fileName, uploadFolderId);
 
     // DON'T make public - keep restricted to owner only
-    // Transcripts use separate function with public access
+    // Files remain private and accessible only to the Drive account owner
 
     // Return file link (only accessible to owner)
     return `https://drive.google.com/file/d/${fileId}/view`;
@@ -147,10 +148,12 @@ async function uploadTranscriptToGoogleDrive(filePath, fileName, companyName, ta
     let uploadFolderId;
 
     if (targetFolderId) {
-      // Use specific folder ID from config (same as recordings)
+      // Use specific restricted folder ID from .env (TRANSCRIPT_DRIVE_FOLDER_ID)
+      // This folder should be set to owner-only access for privacy
+      // Can be the same as GOOGLE_DRIVE_FOLDER_ID or a separate folder for organization
       uploadFolderId = targetFolderId;
     } else {
-      // Fallback: Get or create base folder
+      // Fallback: Get or create base folder (for backward compatibility)
       const baseFolderId = await findOrCreateFolder('Interview_Recordings');
       // Get or create company folder (same structure as recordings)
       uploadFolderId = await findOrCreateFolder(companyName, baseFolderId);
@@ -159,7 +162,8 @@ async function uploadTranscriptToGoogleDrive(filePath, fileName, companyName, ta
     // Upload file
     const fileId = await uploadFile(filePath, fileName, uploadFolderId);
 
-    // DON'T make public - keep restricted to owner only (same as recordings)
+    // DON'T make public - keep restricted to owner only
+    // Transcripts contain sensitive interview data and must remain private
 
     // Return file link (only accessible to owner)
     return `https://drive.google.com/file/d/${fileId}/view`;
